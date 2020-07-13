@@ -1,6 +1,7 @@
 module github.com/martin-helmich/prometheus-nginxlog-exporter
 
 require (
+	github.com/DataDog/datadog-go v3.7.2+incompatible
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/creack/pty v1.1.9 // indirect

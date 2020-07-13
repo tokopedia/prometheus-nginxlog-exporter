@@ -36,6 +36,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/satyrius/gonx"
+	"github.com/DataDog/datadog-go/statsd"
 )
 
 type NSMetrics struct {
@@ -44,7 +45,7 @@ type NSMetrics struct {
 	Metrics
 }
 
-func NewNSMetrics(cfg *config.NamespaceConfig) *NSMetrics {
+func NewNSMetrics(cfg *config.NamespaceConfig, ddog *statsd.Client) *NSMetrics {
 	m := &NSMetrics{
 		cfg:      cfg,
 		registry: prometheus.NewRegistry(),
@@ -58,6 +59,7 @@ func NewNSMetrics(cfg *config.NamespaceConfig) *NSMetrics {
 	m.registry.MustRegister(m.responseSeconds)
 	m.registry.MustRegister(m.responseSecondsHist)
 	m.registry.MustRegister(m.parseErrorsTotal)
+	m.datadogClient = ddog
 	return m
 }
 
@@ -71,6 +73,7 @@ type Metrics struct {
 	responseSeconds     *prometheus.SummaryVec
 	responseSecondsHist *prometheus.HistogramVec
 	parseErrorsTotal    prometheus.Counter
+	datadogClient       *statsd.Client
 }
 
 func inLabels(label string, labels []string) bool {
@@ -152,6 +155,33 @@ func (m *Metrics) Init(cfg *config.NamespaceConfig) {
 	})
 }
 
+//For Datadog START
+func (m *Metrics) IncrDD(name string, tags []string) {
+	if m.datadogClient == nil {
+		return
+	}
+	m.datadogClient.Incr(name, tags, 1)
+}
+func (m *Metrics) CountDD(name string, value int64, tags []string) {
+	if m.datadogClient == nil {
+		return
+	}
+	m.datadogClient.Count(name, value, tags, 1)
+}
+func (m *Metrics) HistogramDD(name string, value float64, tags []string) {
+	if m.datadogClient == nil {
+		return
+	}
+	m.datadogClient.Histogram(name, value, tags, 1)
+}
+func (m *Metrics) GaugeDD(name string, value float64, tags []string) {
+	if m.datadogClient == nil {
+		return
+	}
+	m.datadogClient.Gauge(name, value, tags, 1)
+}
+//For Datadog END
+
 func main() {
 	var opts config.StartupFlags
 	var cfg = config.Config{
@@ -170,6 +200,7 @@ func main() {
 	flag.BoolVar(&opts.EnableExperimentalFeatures, "enable-experimental", false, "Set this flag to enable experimental features")
 	flag.StringVar(&opts.CPUProfile, "cpuprofile", "", "write cpu profile to `file`")
 	flag.StringVar(&opts.MemProfile, "memprofile", "", "write memory profile to `file`")
+	flag.StringVar(&opts.DatadogUrl, "datadog-url", "datadog.tokopedia.local:8125", "Datadog URL")
 	flag.StringVar(&opts.MetricsEndpoint, "metrics-endpoint", cfg.Listen.MetricsEndpoint, "URL path at which to serve metrics")
 	flag.Parse()
 
@@ -198,6 +229,12 @@ func main() {
 		stopHandlers.Wait()
 	}()
 
+	dd, err := statsd.New(opts.DatadogUrl)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to connect to datadog.")
+		os.Exit(1)
+	}
+
 	prof.SetupCPUProfiling(opts.CPUProfile, stopChan, &stopHandlers)
 	prof.SetupMemoryProfiling(opts.MemProfile, stopChan, &stopHandlers)
 
@@ -217,7 +254,7 @@ func main() {
 	}
 
 	for _, ns := range cfg.Namespaces {
-		nsMetrics := NewNSMetrics(&ns)
+		nsMetrics := NewNSMetrics(&ns, dd)
 		nsGatherers = append(nsGatherers, nsMetrics.registry)
 
 		fmt.Printf("starting listener for namespace %s\n", ns.Name)
@@ -329,14 +366,22 @@ func processSource(nsCfg config.NamespaceConfig, t tail.Follower, parser *gonx.P
 	relabelings = relabeling.UniqueRelabelings(relabelings)
 
 	staticLabelValues := nsCfg.OrderedLabelValues
+	staticLabels := nsCfg.Labels //For Datadog
+	staticName := nsCfg.Name //For Datadog
 
 	totalLabelCount := len(staticLabelValues) + len(relabelings)
 	relabelLabelOffset := len(staticLabelValues)
 	labelValues := make([]string, totalLabelCount)
+	datadogLabels := []string{} //For Datadog
 
 	for i := range staticLabelValues {
 		labelValues[i] = staticLabelValues[i]
 	}
+	//For Datadog START
+	for k, v := range staticLabels {
+		datadogLabels = append(datadogLabels, fmt.Sprintf("%s:%s", k, v))
+	}
+	//For Datadog END
 
 	for line := range t.Lines() {
 		if nsCfg.PrintLog {
@@ -351,30 +396,41 @@ func processSource(nsCfg config.NamespaceConfig, t tail.Follower, parser *gonx.P
 		}
 
 		fields := entry.Fields()
+		tags := []string{}
+		copy(tags, datadogLabels)
 
 		for i := range relabelings {
 			if str, ok := fields[relabelings[i].SourceValue]; ok {
 				mapped, err := relabelings[i].Map(str)
 				if err == nil {
 					labelValues[i+relabelLabelOffset] = mapped
+					tags = append(tags, fmt.Sprintf("%s:%s", relabelings[i].TargetLabel, mapped))
+
+					if relabelings[i].TargetLabel == "status" {
+						tags = append(tags, fmt.Sprintf("status_group:%sxx", mapped[0:1]))
+					}
 				}
 			}
 		}
 
 		metrics.countTotal.WithLabelValues(labelValues...).Inc()
+		metrics.IncrDD(staticName+".nginx.response.count_total", tags) //For Datadog
 
 		if bytes, ok := floatFromFields(fields, "body_bytes_sent"); ok {
 			metrics.bytesTotal.WithLabelValues(labelValues...).Add(bytes)
+			metrics.CountDD(staticName+".nginx.response.size_bytes", int64(bytes), tags) //For Datadog
 		}
 
 		if upstreamTime, ok := floatFromFields(fields, "upstream_response_time"); ok {
 			metrics.upstreamSeconds.WithLabelValues(labelValues...).Observe(upstreamTime)
 			metrics.upstreamSecondsHist.WithLabelValues(labelValues...).Observe(upstreamTime)
+			metrics.HistogramDD(staticName+".nginx.upstream.time_seconds", upstreamTime, tags) //For Datadog
 		}
 
 		if responseTime, ok := floatFromFields(fields, "request_time"); ok {
 			metrics.responseSeconds.WithLabelValues(labelValues...).Observe(responseTime)
 			metrics.responseSecondsHist.WithLabelValues(labelValues...).Observe(responseTime)
+			metrics.HistogramDD(staticName+".nginx.response.time_seconds", responseTime, tags) //For Datadog
 		}
 	}
 }

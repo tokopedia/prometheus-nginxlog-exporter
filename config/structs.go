@@ -9,6 +9,7 @@ type StartupFlags struct {
 	Namespace                  string
 	ListenPort                 int
 	EnableExperimentalFeatures bool
+	DatadogUrl                 string
 	MetricsEndpoint            string
 
 	CPUProfile string
