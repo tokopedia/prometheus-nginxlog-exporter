@@ -1,7 +1,7 @@
 package relabeling
 
 import (
-	"github.com/martin-helmich/prometheus-nginxlog-exporter/config"
+	"github.com/tokopedia/prometheus-nginxlog-exporter/config"
 	"testing"
 )
 

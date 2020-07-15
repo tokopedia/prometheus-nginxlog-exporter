@@ -1,6 +1,6 @@
 package relabeling
 
-import "github.com/martin-helmich/prometheus-nginxlog-exporter/config"
+import "github.com/tokopedia/prometheus-nginxlog-exporter/config"
 
 // Relabeling contains a relabeling configuration and is responsible for
 // executing the rules specified in the original configuration
