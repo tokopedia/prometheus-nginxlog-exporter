@@ -413,6 +413,13 @@ func processSource(nsCfg config.NamespaceConfig, t tail.Follower, parser *gonx.P
 			}
 		}
 
+		tkpenv := os.Getenv("TKPENV")
+		if tkpenv == "" {
+			tkpenv = "development"
+		}
+
+		tags = append(tags, fmt.Sprintf("env:%s", tkpenv))
+
 		metrics.countTotal.WithLabelValues(labelValues...).Inc()
 		metrics.IncrDD(staticName+".nginx.response.count_total", tags) //For Datadog
 
