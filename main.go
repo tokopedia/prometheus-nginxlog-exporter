@@ -26,17 +26,16 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/martin-helmich/prometheus-nginxlog-exporter/syslog"
-
-	"github.com/martin-helmich/prometheus-nginxlog-exporter/config"
-	"github.com/martin-helmich/prometheus-nginxlog-exporter/discovery"
-	"github.com/martin-helmich/prometheus-nginxlog-exporter/prof"
-	"github.com/martin-helmich/prometheus-nginxlog-exporter/relabeling"
-	"github.com/martin-helmich/prometheus-nginxlog-exporter/tail"
+	"github.com/DataDog/datadog-go/statsd"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/satyrius/gonx"
-	"github.com/DataDog/datadog-go/statsd"
+	"github.com/tokopedia/prometheus-nginxlog-exporter/config"
+	"github.com/tokopedia/prometheus-nginxlog-exporter/discovery"
+	"github.com/tokopedia/prometheus-nginxlog-exporter/prof"
+	"github.com/tokopedia/prometheus-nginxlog-exporter/relabeling"
+	"github.com/tokopedia/prometheus-nginxlog-exporter/syslog"
+	"github.com/tokopedia/prometheus-nginxlog-exporter/tail"
 )
 
 type NSMetrics struct {
@@ -180,6 +179,7 @@ func (m *Metrics) GaugeDD(name string, value float64, tags []string) {
 	}
 	m.datadogClient.Gauge(name, value, tags, 1)
 }
+
 //For Datadog END
 
 func main() {
@@ -367,7 +367,7 @@ func processSource(nsCfg config.NamespaceConfig, t tail.Follower, parser *gonx.P
 
 	staticLabelValues := nsCfg.OrderedLabelValues
 	staticLabels := nsCfg.Labels //For Datadog
-	staticName := nsCfg.Name //For Datadog
+	staticName := nsCfg.Name     //For Datadog
 
 	totalLabelCount := len(staticLabelValues) + len(relabelings)
 	relabelLabelOffset := len(staticLabelValues)
