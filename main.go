@@ -26,8 +26,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/tokopedia/prometheus-nginxlog-exporter/syslog"
-
 	"github.com/DataDog/datadog-go/statsd"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -36,6 +34,7 @@ import (
 	"github.com/tokopedia/prometheus-nginxlog-exporter/discovery"
 	"github.com/tokopedia/prometheus-nginxlog-exporter/prof"
 	"github.com/tokopedia/prometheus-nginxlog-exporter/relabeling"
+	"github.com/tokopedia/prometheus-nginxlog-exporter/syslog"
 	"github.com/tokopedia/prometheus-nginxlog-exporter/tail"
 )
 
