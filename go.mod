@@ -1,4 +1,4 @@
-module github.com/martin-helmich/prometheus-nginxlog-exporter
+module  github.com/tokopedia/prometheus-nginxlog-exporter
 
 require (
 	github.com/DataDog/datadog-go v3.7.2+incompatible
