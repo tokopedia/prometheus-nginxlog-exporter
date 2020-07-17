@@ -19,10 +19,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -155,6 +158,8 @@ func (m *Metrics) Init(cfg *config.NamespaceConfig) {
 }
 
 //For Datadog START
+var datadogTags map[string]bool
+
 func (m *Metrics) IncrDD(name string, tags []string) {
 	if m.datadogClient == nil {
 		return
@@ -234,6 +239,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to connect to datadog.")
 		os.Exit(1)
 	}
+	datadogTags = make(map[string]bool)
 
 	prof.SetupCPUProfiling(opts.CPUProfile, stopChan, &stopHandlers)
 	prof.SetupMemoryProfiling(opts.MemProfile, stopChan, &stopHandlers)
@@ -360,6 +366,24 @@ func processNamespace(nsCfg config.NamespaceConfig, metrics *Metrics) {
 
 }
 
+func getServerIP() (string, error) {
+	output, err := exec.Command("ip", "r").Output()
+	if err != nil {
+		return "0.0.0.0", nil
+	}
+
+	result := ""
+	arr := strings.Split(string(output), "\n")
+	for _, v := range arr {
+		if strings.Contains(v, "proto kernel") && strings.Contains(v, "scope link") {
+			splited := strings.Split(v, " ")
+			result = splited[len(splited)-1]
+		}
+	}
+
+	return result, nil
+}
+
 func processSource(nsCfg config.NamespaceConfig, t tail.Follower, parser *gonx.Parser, metrics *Metrics) {
 	relabelings := relabeling.NewRelabelings(nsCfg.RelabelConfigs)
 	relabelings = append(relabelings, relabeling.DefaultRelabelings...)
@@ -381,6 +405,11 @@ func processSource(nsCfg config.NamespaceConfig, t tail.Follower, parser *gonx.P
 	for k, v := range staticLabels {
 		datadogLabels = append(datadogLabels, fmt.Sprintf("%s:%s", k, v))
 	}
+
+	hostname, _ := os.Hostname()
+	serverIP, _ := getServerIP()
+	datadogLabels = append(datadogLabels, fmt.Sprintf("%s_hostname:%s", staticName, hostname))
+	datadogLabels = append(datadogLabels, fmt.Sprintf("%s_ip:%s", staticName, serverIP))
 	//For Datadog END
 
 	for line := range t.Lines() {
@@ -415,6 +444,15 @@ func processSource(nsCfg config.NamespaceConfig, t tail.Follower, parser *gonx.P
 
 		metrics.countTotal.WithLabelValues(labelValues...).Inc()
 		metrics.IncrDD(staticName+".nginx.response.count_total", tags) //For Datadog
+
+		// check datadog tags length
+		for _, t := range tags {
+			datadogTags[t] = true
+		}
+		if len(datadogTags) >= 400 {
+			log.Printf("too many datadog tags beign created, please check, datadogTags: %v", datadogTags)
+			os.Exit(0)
+		}
 
 		if bytes, ok := floatFromFields(fields, "body_bytes_sent"); ok {
 			metrics.bytesTotal.WithLabelValues(labelValues...).Add(bytes)
