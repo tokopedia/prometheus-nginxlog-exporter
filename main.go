@@ -426,7 +426,9 @@ func processSource(nsCfg config.NamespaceConfig, t tail.Follower, parser *gonx.P
 
 		fields := entry.Fields()
 		tags := []string{}
-		copy(tags, datadogLabels)
+		for _, v := range datadogLabels {
+			tags = append(tags, v)
+		}
 
 		for i := range relabelings {
 			if str, ok := fields[relabelings[i].SourceValue]; ok {
