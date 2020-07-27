@@ -375,6 +375,7 @@ func getServerIP() (string, error) {
 	result := ""
 	arr := strings.Split(string(output), "\n")
 	for _, v := range arr {
+		v = strings.TrimSpace(v)
 		if strings.Contains(v, "proto kernel") && strings.Contains(v, "scope link") {
 			splited := strings.Split(v, " ")
 			result = splited[len(splited)-1]
