@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -446,14 +445,14 @@ func processSource(nsCfg config.NamespaceConfig, t tail.Follower, parser *gonx.P
 		metrics.countTotal.WithLabelValues(labelValues...).Inc()
 		metrics.IncrDD(staticName+".nginx.response.count_total", tags) //For Datadog
 
-		// check datadog tags length
-		for _, t := range tags {
-			datadogTags[t] = true
-		}
-		if len(datadogTags) >= 400 {
-			log.Printf("too many datadog tags beign created, please check, datadogTags: %v", datadogTags)
-			os.Exit(0)
-		}
+		// // check datadog tags length
+		// for _, t := range tags {
+		// 	datadogTags[t] = true
+		// }
+		// if len(datadogTags) >= 400 {
+		// 	log.Printf("too many datadog tags beign created, please check, datadogTags: %v", datadogTags)
+		// 	os.Exit(0)
+		// }
 
 		if bytes, ok := floatFromFields(fields, "body_bytes_sent"); ok {
 			metrics.bytesTotal.WithLabelValues(labelValues...).Add(bytes)
